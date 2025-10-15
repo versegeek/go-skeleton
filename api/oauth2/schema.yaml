@@ -1,0 +1,424 @@
+openapi: 3.0.0
+info:
+  title: OAuth Service
+  description: |
+    It is a standard OAuth 2.0 implementation with extension APIs.
+  version: 0.0.0
+servers:
+  - url: localhost:8080
+    description: local stack
+  - url: dev.stack
+    description: dev stack
+
+paths:
+  /oauth2/v1/auth:
+    get:
+      summary: The OAuth 2.0 Auth endpoint
+      description: |-
+        For more information, please refer to https://tools.ietf.org/html/rfc6749#section-4
+      parameters:
+        - name: client_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: idp_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: redirect_uri
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: response_type
+          description: |-
+            Available values : code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: code_challenge
+          description: |-
+            The code challenge, if this is a pkce request
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: code_challenge_method
+          description: |-
+            The code challenge method must be S256, if this is a pkce request
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: idp_scopes
+          description: |-
+            Space-seperated. The idp dynamic scopes should be in your client's scope list, will be passes to idp.
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "302":
+          description: status 302
+          content:
+            text/plain:
+              schema:
+                type: string
+                default: "Location https://baseurl/callback?code=xxxxxxxxx&state=xxxxxxx&scope=xxxxxxx"
+        "401":
+          description: unauthorized
+        "500":
+          description: internal error
+  /oauth2/v1/token:
+    post:
+      summary: The OAuth 2.0 Token endpoint
+      description: |-
+        The endpoint requires client authentication. See https://tools.ietf.org/html/rfc6749#section-2.3.1
+      parameters:
+        - name: Authorization
+          description: |-
+            The client_id and client_secret should be included in the Authorization header of the request as a Basic auth base64-encoded string.
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/token_requestBody'
+
+      responses:
+        "200":
+          description: success. org-less token is returned. for device flow, org-aware token is returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/token_response'
+        "400":
+          description: bad parameter or lose parameter
+        "401":
+          description: unauthorized
+        "500":
+          description: internal error
+  /oauth2/v1/revoke:
+    post:
+      summary: The OAuth 2.0 Revoke endpoint
+      description: |-
+        The endpoint requires client authentication. See https://tools.ietf.org/html/rfc6749#section-2.3.1 section for more information
+        If the token is invalid, the service will not verify the token and return 200.
+      parameters:
+        - name: Authorization
+          description: |-
+            The client_id and client_secret should be included in the Authorization header of the request as a Basic auth base64-encoded string.
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/token_type_hint_requestBody'
+      responses:
+        "200":
+          description: success
+        "401":
+          description: unauthorized
+        "500":
+          description: internal error
+  /oauth2/v1/introspect:
+    post:
+      summary: The OAuth 2.0 Introspect endpoint
+      description: |-
+        For more information, please refer to https://tools.ietf.org/html/rfc7662
+      parameters:
+        - name: Authorization
+          description: |-
+            The client_id and client_secret should be included in the Authorization header of the request as a Basic auth base64-encoded string.
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/token_type_hint_requestBody'
+      responses:
+        "200":
+          description: success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/introspect_response'
+        "401":
+          description: unauthorized
+        "500":
+          description: internal error
+  /oauth2/v1/userinfo:
+    post:
+      summary: The OIDC userinfo endpoint
+      description: |-
+        For more information, please refer to https://tools.ietf.org/html/rfc7662
+      parameters:
+        - name: Authorization
+          description: |-
+            The Access Token obtained from an OpenID Connect Authentication Request MUST be sent as a Bearer Token, per Section 2 of OAuth 2.0 Bearer Token Usage [RFC6750]
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/userinfo_response'
+        "401":
+          description: unauthorized
+        "500":
+          description: internal error
+  /oauth2/v1/{tenant}/.well-known/openid-configuration:
+    get:
+      summary: The OIDC well-known endpoint
+      description: |-
+        The OIDC Wellknown endpoint
+      parameters:
+        - name: tenant
+          description: tenant id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/wellknow_response'
+        "401":
+          description: unauthorized
+        "500":
+          description: internal error
+  /oauth2/v1/extensions/blacklist:
+    post:
+      summary: Check if token is invalidated/revoked
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/token_type_hint_requestBody'
+      responses:
+        "200":
+          description: success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  active:
+                    type: boolean
+
+        "400":
+          description: bad parameters
+        "401":
+          description: unauthorized
+        "500":
+          description: internal error
+components:
+  schemas:
+    token_response:
+      type: object
+      properties:
+        access_token:
+          type: string
+        expires_in:
+          type: number
+        refresh_token:
+          type: string
+        scope:
+          type: string
+        token_type:
+          type: string
+    id_token_response:
+      type: object
+      properties:
+        access_token:
+          type: string
+        expires_in:
+          type: number
+        refresh_token:
+          type: string
+        scope:
+          type: string
+        token_type:
+          type: string
+        id_token:
+          type: string
+    introspect_response:
+      type: object
+      properties:
+        active:
+          type: boolean
+        aud:
+          type: array
+          items:
+            type: string
+        client_id:
+          type: string
+        exp:
+          type: string
+        iat:
+          type: string
+        scope:
+          type: string
+        sub:
+          type: string
+    wellknow_response:
+      type: object
+      properties:
+        issuer:
+          type: string
+        authorization_endpoint:
+          type: string
+        token_endpoint:
+          type: string
+        user_info_endpoint:
+          type: string
+          description: https://baseurl.hponecloud.io/oauth2/userinfo
+        jwks_uri:
+          type: string
+          description: https://baseurl.hponecloud.io/10/jwks.json
+        registration_endpoint:
+          type: string
+          description: https://baseurl.hponecloud.io/oauth2/v1/register
+        subject_types_supported:
+          type: array
+          items:
+            type: string
+        response_types_supported:
+          type: array
+          items:
+            type: string
+        id_token_signing_alg_values_supported:
+          type: array
+          items:
+            type: string
+        claims_supported:
+          type: array
+          items:
+            type: string
+    userinfo_response:
+      type: object
+      properties:
+        addresss:
+          type: object
+          properties:
+            country:
+              type: string
+            locality:
+              type: string
+            postal_code:
+              type: string
+            region:
+              type: string
+            street_address:
+              type: string
+        aud:
+          type: array
+          items:
+            type: string
+        auth_time:
+          type: number
+        cid:
+          type: string
+        email:
+          type: string
+        email_verified:
+          type: boolean
+        family_name:
+          type: string
+        given_name:
+          type: string
+        iat:
+          type: string
+        idp_id:
+          type: string
+        idp_tenant:
+          type: string
+        idp_type:
+          type: string
+        iss:
+          type: string
+        kid:
+          type: string
+        locale:
+          type: string
+        middle_name:
+          type: string
+        name:
+          type: string
+        nickname:
+          type: string
+        phone_number:
+          type: string
+        prefer_username:
+          type: string
+        rat:
+          type: number
+        sub:
+          type: string
+    token_type_hint_requestBody:
+      type: object
+      properties:
+        token_type_hint:
+          description: |-
+            access_token, refresh_token
+          type: string
+        token:
+          type: string
+      required:
+        - token_type_hint
+        - token
+    token_requestBody:
+      type: object
+      properties:
+        grant_type:
+          description: |-
+            Available values : authorization_code, client_credentials, refresh_token, urn:ietf:params:oauth:grant-type:device_code
+            Default value : authorization_code
+          type: string
+        code:
+          description: Required if grant_type is authorization_code
+          type: string
+        redirect_uri:
+          description: Required if grant_type is authorization_code
+          type: string
+        refresh_token:
+          description: Required if grant_type is refresh_token. The value is a valid refresh token that was returned from this endpoint previously.
+          type: string
+        code_verifier:
+          description: Required if grant_type is authorization_code and code_challenge was specified in the original /auth request
+          type: string
+        device_code:
+          description: Required if grant_type is urn:ietf:params:oauth:grant-type:device_code
+          type: string
+        client_id:
+          description: Required if grant_type is urn:ietf:params:oauth:grant-type:device_code
+          type: string
+      required:
+        - grant_type
+    
+
+    

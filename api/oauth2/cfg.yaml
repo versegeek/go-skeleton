@@ -1,0 +1,6 @@
+package: oauth2
+generate:
+  gin-server: true
+  models: true
+#  embedded-spec: true
+output: oauth2.gen.go
